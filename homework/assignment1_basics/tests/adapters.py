@@ -9,9 +9,7 @@ import numpy.typing as npt
 import torch
 from torch import Tensor, nn
 
-from cs336_basics import Linear, Embedding, RMSNorm, SwigLU, ScaledDotProductAttention, CausalMultiHeadAttention, TransformerBlock
-from cs336_basics import softmax, AdamW, cosine_learning_rate_schedule, gradient_clipping, RotaryPositionalEmbedding
-
+from cs336_basics import *
 
 # torch.cuda.is_available()
 # print(torch.__version__)
@@ -315,7 +313,6 @@ def run_transformer_block(
                                          )
     transformer_block.norm1.weight.data.copy_(weights["ln1.weight"])
     transformer_block.norm2.weight.data.copy_(weights["ln2.weight"])
-    print(transformer_block.feed_forward.weight1.shape, weights["ffn.w1.weight"].shape)
     transformer_block.feed_forward.weight1.data.copy_(weights["ffn.w1.weight"].T)
     transformer_block.feed_forward.weight2.data.copy_(weights["ffn.w2.weight"].T)
     transformer_block.feed_forward.weight3.data.copy_(weights["ffn.w3.weight"].T)
@@ -469,8 +466,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
-
+    return get_batch_data(data=dataset, batch_size=batch_size, context_length=context_length, device=device)
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
     """
@@ -503,7 +499,7 @@ def run_cross_entropy(inputs: Float[Tensor, " batch_size vocab_size"], targets: 
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    return cross_entropy(inputs, targets)
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
@@ -569,7 +565,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    return save_checkpoint(model=model, optimizer=optimizer, iteration=iteration, out=out)
 
 
 def run_load_checkpoint(
@@ -590,7 +586,7 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    return load_checkpoint(src=src, model=model, optimizer=optimizer)
 
 
 def get_tokenizer(
