@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from einops import rearrange,einsum
 from jaxtyping import Float, Int
 
-from  cs336_basics.utils import softmax
+from  .utils import softmax
 
 class Linear(nn.Module):
     """Simple linear layer"""

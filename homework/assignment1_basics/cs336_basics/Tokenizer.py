@@ -80,27 +80,17 @@ if __name__ == "__main__":
     #     pre_token_table = pool.imap_unordered(pre_token, chunks_index)
     #     results = list(pre_token_table)
     # print(time.time() - now)
-    nums = [0,0,0,0]
-    length = len(nums)
-    if length > 3:
-        
-        ans = []
-        nums.sort()
-        for i in range(length):
-            if nums[i] > 0:
-                break
-            left = i + 1
-            right = length - 1
-            if length >3:
-                if nums[left] == nums[left+1] or nums[right] == nums[right-1]:
-                    continue
-            while(left < right):
-                if nums[left] +nums[right] +nums[i] < 0:
-                    left += 1
-                elif nums[left] +nums[right] +nums[i] > 0:
-                    right -= 1
-                else:
-                    ans.append([nums[left],nums[right],nums[i]])
-                break
+    chunks=["low", "low", "low", "low", "low", "lower", "lower", "widest", "widest", "widest", "newest", "newest", "newest", "newest", "newest", "newest"]
+    frequency_table = defaultdict(int)
+    pair_table = defaultdict(int)
+    vocabulary_dict = {}
+    vocabulary_num = 256
+    for chunk in chunks:
+        frequency_table[tuple(chunk.encode("utf-8"))] += 1
+    for byte, num in frequency_table.items():
+        for i in range(len(byte) - 1):
+            pair_table[byte[i:i+2]] += num
+    merge_pairs = sorted(pair_table.items(), key=lambda x: x[1], reverse=True)
+    print(merge_pairs)
+    print(pair_table)
 
-    print(ans)
