@@ -1,3 +1,5 @@
+__all__ = ["train_bpe_tokenizer"]
+
 import regex as re
 import os
 from typing import BinaryIO
@@ -45,28 +47,27 @@ def find_chunk_boundaries(
     return sorted(set(chunk_boundaries))
 
 
-def pre_token(parameters_dict: dict) -> tuple[list, dict, dict]:
-    start, end = parameters_dict["chunks_index"]
-    input_path = parameters_dict["input_path"]
-    text = ""
-    with open(input_path, "rb") as f:
-        f.seek(start)
-        text += f.read(end - start).decode("utf-8", errors="ignore")
-    pattern = "|".join(map(re.escape, "<|endoftext|>"))
-    chunks = re.split(pattern, text)
-    frequency_table = defaultdict(int)
-    chunk_list = []
-    for chunk in chunks:
-        ans = re.finditer(PAT, chunk)
-        for item in ans:
-            utf8_text = tuple(item.group().encode("utf-8"))
-            frequency_table[utf8_text] += 1
-            chunk_list.append(utf8_text)
-
+def pre_token(special_tokens: list, input_path: str) -> tuple[list, dict, dict]:
+    with open(input_path, "r", encoding="utf-8") as f:
+        # boundaries = find_chunk_boundaries(f, 5, "<|endoftext|>".encode("utf-8"))
+        # for start, end in zip(boundaries[:-1], boundaries[1:]):
+        #     f.seek(start)
+        #     chunk = f.read(end - start).decode("utf-8", errors="ignore")
+        pattern = "|".join(map(re.escape, special_tokens))
+        chunks = re.split(pattern, f.read())
+        frequency_table = defaultdict(int)
+        chunk_list = []
+        for chunk in chunks:
+            ans = re.finditer(PAT, chunk)
+            for item in ans:
+                utf8_text = item.group().encode("utf-8")
+                frequency_table[utf8_text] += 1
+                chunk_list.append(utf8_text)
     pair_table = defaultdict(int)
     for key, value in frequency_table.items():
         for i in range(len(key) - 1):
-            pair_table[key[i:i + 2]] += 1
+            pair = (key[i:i+1], key[i+1:i+2])
+            pair_table[pair] += 1
     return chunk_list, frequency_table, pair_table
 
 
@@ -76,22 +77,22 @@ def train_bpe_tokenizer(
         special_tokens: list[str],
 ) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     now = time.time()
-    vocabulary_dict = {}
-    vocabulary_num = 257
+    vocabulary_dict = {i: bytes([i]) for i in range(256)}
+    vocabulary_num = 256
     for special_token in special_tokens:
         vocabulary_dict[vocabulary_num] = special_token.encode("utf-8")
         vocabulary_num += 1
 
-    with open(input_path, "rb") as f:
-        boundaries = find_chunk_boundaries(f, num_processes, "<|endoftext|>".encode("utf-8"))
-        chunks_index = [(start, end) for start, end in zip(boundaries[:-1], boundaries[1:])]
+    # parameters_dict = {"chunks_index": chunks_index, "input_path": input_path}
+    # with Pool(processes=num_processes) as pool:
+    #     chunks, frequency_table, pair_table = pool.imap_unordered(pre_token, parameters_dict)
 
-    parameters_dict = {"chunks_index": chunks_index, "input_path": input_path}
-    with Pool(processes=num_processes) as pool:
-        chunks, frequency_table, pair_table = pool.imap_unordered(pre_token, parameters_dict)
+    chunks, frequency_table, pair_table = pre_token(special_tokens, input_path)
+    merges = []
     while vocabulary_num < vocab_size:
         merge_pairs = max(pair_table.items(), key=lambda x: (x[1], x[0]))[0]
         vocabulary_dict[vocabulary_num] = merge_pairs
+        merges.append(tuple(merge_pairs))
         new_token_id = vocabulary_num
         vocabulary_num += 1
         l, r = merge_pairs
@@ -99,6 +100,7 @@ def train_bpe_tokenizer(
 
         new_chunk = []
         for chunk in chunks:
+            # print(chunk)
             i = 0
             merge_chunk = []
             while i < len(chunk):
@@ -129,16 +131,18 @@ def train_bpe_tokenizer(
 
             new_chunk.append(tuple(merge_chunk))
         chunks = new_chunk
-    print(time.time() - now)
+
+    # print(time.time() - now, vocabulary_dict)
+    return vocabulary_dict, merges
 
 
-if __name__ == "__main__":
-    vocab_size = 1000
-    num_processes = 12
-    input_path = r"D:\Learn-Stanford-CS336\homework\assignment1_basics\data\TinyStories-valid.txt"
-    special_tokens = ["<|endoftext|>"]
-    chunks = ["low", "low", "low", "low", "low", "lower", "lower", "widest", "widest", "widest", "newest", "newest",
-              "newest", "newest", "newest", "newest"]
-    chunks = [tuple(chunk.encode("utf-8")) for chunk in chunks]
-    pair_table = defaultdict(int)
-    frequency_table = Counter(chunks)
+# if __name__ == "__main__":
+#     vocab_size = 1000
+#     num_processes = 12
+#     input_path = r"D:\Learn-Stanford-CS336\homework\assignment1_basics\data\TinyStories-valid.txt"
+#     special_tokens = ["<|endoftext|>"]
+#     chunks = ["low", "low", "low", "low", "low", "lower", "lower", "widest", "widest", "widest", "newest", "newest",
+#               "newest", "newest", "newest", "newest"]
+#     chunks = [tuple(chunk.encode("utf-8")) for chunk in chunks]
+#     pair_table = defaultdict(int)
+#     frequency_table = Counter(chunks)
