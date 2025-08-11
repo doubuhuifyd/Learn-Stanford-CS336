@@ -1,0 +1,1 @@
+BPE_DATASET_PATH = r"D:\Learn-Stanford-CS336\homework\assignment1_basics\data\TinyStories-valid.txt"
