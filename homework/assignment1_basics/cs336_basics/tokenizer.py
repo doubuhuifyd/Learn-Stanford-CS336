@@ -91,9 +91,10 @@ def train_bpe_tokenizer(
     merges = []
     while vocabulary_num < vocab_size:
         merge_pairs = max(pair_table.items(), key=lambda x: (x[1], x[0]))[0]
-        vocabulary_dict[vocabulary_num] = merge_pairs
-        merges.append(tuple(merge_pairs))
+        merges.append(merge_pairs)
+        new_token_bytes = merge_pairs[0] + merge_pairs[1]
         new_token_id = vocabulary_num
+        vocabulary_dict[vocabulary_num] = new_token_bytes
         vocabulary_num += 1
         l, r = merge_pairs
         del (pair_table[merge_pairs])
@@ -102,34 +103,34 @@ def train_bpe_tokenizer(
         for chunk in chunks:
             # print(chunk)
             i = 0
-            merge_chunk = []
+            merge_chunk = bytearray()
             while i < len(chunk):
-                if i < len(chunk) - 1 and chunk[i] == l and chunk[i + 1] == r:
+                if i < len(chunk) - 1 and chunk[i:i+1] == l and chunk[i+1:i+2] == r:
+                    merge_chunk.extend(new_token_bytes)
                     if i > 0:
-                        new_pair = (chunk[i - 1], new_token_id)
+                        new_pair = (chunk[i-1:i], new_token_bytes)
                         pair_table[new_pair] += 1
 
-                        left_pair = (chunk[i - 1], l)
+                        left_pair = (chunk[i-1:i], l)
                         pair_table[left_pair] -= 1
                         if pair_table[left_pair] <= 0:
                             del pair_table[left_pair]
 
                     if i < len(chunk) - 2:
-                        new_pair = (new_token_id, chunk[i + 2])
+                        new_pair = (new_token_bytes, chunk[i+2:i+3])
                         pair_table[new_pair] += 1
 
-                        right_pair = (r, chunk[i + 2])
+                        right_pair = (r, chunk[i+2:i+3])
                         pair_table[right_pair] -= 1
                         if pair_table[right_pair] <= 0:
                             del pair_table[right_pair]
 
                     i += 2
-                    merge_chunk.append(new_token_id)
                 else:
-                    merge_chunk.append(chunk[i])
+                    merge_chunk.extend(chunk[i:i+1])
                     i += 1
 
-            new_chunk.append(tuple(merge_chunk))
+            new_chunk.append(bytes(merge_chunk))
         chunks = new_chunk
 
     # print(time.time() - now, vocabulary_dict)
