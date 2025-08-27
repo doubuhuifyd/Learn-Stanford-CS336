@@ -1,7 +1,8 @@
-__all__ = ["train_bpe_tokenizer"]
+__all__ = ["train_bpe_tokenizer", "Tokenizer"]
 
 import regex as re
 import os
+import json
 from typing import BinaryIO, Iterable, Iterator
 from collections import defaultdict
 from tqdm.contrib.concurrent import process_map
@@ -58,6 +59,7 @@ def pre_token(file: str, special_tokens: list) -> tuple[defaultdict, defaultdict
     word_table = defaultdict(int)
     chunk_list = []
     for chunk in chunks:
+        print(chunk)
         ans = PAT.finditer(chunk)
         for item in ans:
             utf8_text = item.group(0).encode("utf-8")
@@ -153,27 +155,74 @@ def train_bpe_tokenizer(
 
 
 class Tokenizer():
-    def __init__(self, vocab: Dict[int, bytes], merges: list[tuple[bytes, bytes]], special_tokens: list[str] | None = None):
+    def __init__(self, vocab: dict[int, bytes], merges: list[tuple[bytes, bytes]], special_tokens: list[str] | None = None):
         tokens = vocab.values()
         vocab_size = len(tokens)
+        print(vocab, merges)
         if special_tokens:
             for special_token in special_tokens:
                 if special_token.encode("utf-8") not in tokens:
                     vocab_size += 1
                     vocab[vocab_size] = special_token.encode("utf-8")
 
+        vocab_to_id = {}
+        for vocabulary, idx in vocab.items():
+            vocab_to_id[vocabulary] = idx
+        self.vocab_to_id = vocab_to_id
         self.vocab = vocab
-        self.merges = merges
+        self.merges = set(merges)
         self.special_tokens = special_tokens
 
+    @classmethod
     def from_files(cls, vocab_filepath: str, merges_filepath: str, special_tokens: list[str] | None = None):
-        pass
+        with open(vocab_filepath, 'r', encoding='utf-8') as f:
+            vocab = json.load(f)
+            vocab = {int(k): bytes(v, 'latin1') if isinstance(v, str) else bytes(v) for k, v in vocab.items()}
+
+        with open(merges_filepath, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            merge_pairs = [line.strip().split() for line in lines]
+            merges = [(a.encode('utf-8'), b.encode('utf-8')) for a, b in merge_pairs]
+        print(vocab, merges)
+        return cls(vocab=vocab, merges=merges, special_tokens=special_tokens)
 
     def encode(self, text: str)-> list[int]:
-        pass
+        special_tokens = sorted(self.special_tokens, key=len, reverse=True)
+        pattern = "|".join(re.escape(token) for token in special_tokens)
+        pattern = f"({pattern})"
+        chunks = re.split(pattern, text)
+
+        token_id = []
+        for chunk in chunks:
+            if self.special_tokens and chunk in self.special_tokens:
+                token_id.append(self.vocab_to_id[chunk.encode("utf-8")])
+            else:
+                ans = PAT.finditer(chunk)
+                for item in ans:
+                    utf8_text = item.group(0).encode("utf-8")
+                    subword_in_bytes = list(bytes([i]) for i in utf8_text)
+
+                    while True:
+                        min_token_id = float("inf")
+                        merge_idx = -1
+                        merge_pair = None
+                        for i in range(len(subword_in_bytes) - 1):
+                            current_pair = (subword_in_bytes[i], subword_in_bytes[i + 1])
+                            if current_pair in self.merges:
+                                current_token_id = self.vocab_to_id[current_pair]
+                                if current_token_id < min_token_id:
+                                    min_token_id = current_token_id
+                                    merge_idx = i
+                                    merge_pair = subword_in_bytes[i] + subword_in_bytes[i + 1]
+                        if merge_idx == -1:
+                            break
+                        subword_in_bytes = subword_in_bytes[:merge_idx] + [merge_pair] + subword_in_bytes[merge_idx + 2:]
+                    token_id.extend(self.vocab_to_id[i] for i in subword_in_bytes)
+        return token_id
 
     def encode_iterable(self, iterable: Iterable[str])->Iterator[int]:
-        pass
+        for chunk in iterable:
+            yield from self.encode(chunk)
 
     def decode(self, ids:list[int])-> str:
-        pass
+        return b''.join([self.vocab[id] for id in ids]).decode('utf-8',errors='replace')
